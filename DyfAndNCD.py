@@ -58,16 +58,16 @@ class DyfAndNCD(SuperClassifier):
         self.alpha = alpha
         self.NCDlist = dict()
         self.clusterList = []
-        self.epsilon = 0# 应该作为超参分析
-        self.minPts = 10 #初始值固定
-        # self.incri_of_e = 0.5#调节对新类敏感
+        self.epsilon = 0#
+        self.minPts = 10 #
+        # self.incri_of_e = 0.5#
         self.CLASSES = labels
         self.buffer = []
         self.window = 30
         self.count = 0
         self.stability= []
         self.feature_count = []
-        self.alpha = 0.9 #imdb alpha = 0.6 retricted by 0.7
+        self.alpha = 0.9 #
         self.beta = 1-self.alpha
         self.sparse = 0.1  #normal is 0.3
         self.e_step = 0.01
@@ -81,7 +81,7 @@ class DyfAndNCD(SuperClassifier):
         #此处无标签参与
         for i in range(0,len(instance)):
             if np.random.random() > (1-fremove):
-                instance[i] = 0#随机选取FR的特征用0填充
+                instance[i] = 0
         self.update_stability(instance)
         instance = np.multiply(instance, self.feature_count)
         return instance
@@ -145,10 +145,9 @@ class DyfAndNCD(SuperClassifier):
                 print("initialize OK!!!")
 
 
-    def NCD(self, x): #计算所有的距离，若有小于epsilon，则为已知类，否则为异常点,这里做修改进行简化，这里不需要知道具体是哪个类，只要是异常点就检测出来
-        #检测前需要判断是否buffer满
+    def NCD(self, x): 
         if len(self.buffer) > self.window:
-            #buffer满则调用聚类凝聚新类
+            
             self.DBSCAN(self.buffer)
             self.buffer= []
             # print("buffer empty")
@@ -157,51 +156,42 @@ class DyfAndNCD(SuperClassifier):
         #--------------
         A = np.array(x).astype(np.float)
         count_dict = {}
-        for key in self.NCDlist.keys():#这里的是实例本身
+        for key in self.NCDlist.keys():#
             count = 0
-            if len(self.NCDlist[key]) < 2:#稀疏之后
+            if len(self.NCDlist[key]) < 2:#
                 continue
-            #得到核心点列表
+            #
             CPC = np.array(self.NCDlist[key]).astype(np.float)
             CPC = np.row_stack((CPC,A))
             # np.append(CPC, values=A, axis=0)
-            #计算距离矩阵
             dist = self.compute_squared_EDM(CPC)
-            #遍历最后一列或最后一行，为该点到核心点的距离
             for distance in dist[-1]:
                 if distance <= self.epsilon:
                     count+=1
             count_dict[key] = count
         if len(count_dict) == 0:
-            #若检测后没有一个核心点接近则认为是新类
             self.buffer.append(x)
             return -5
-        MaxKey = max(count_dict, key = count_dict.get)     #找到邻域内核心点最多的类
+        MaxKey = max(count_dict, key = count_dict.get)     
         Maxvalue = count_dict[MaxKey]
-        if Maxvalue > self.minPts : #邻域内核心点数量满足则为正常类,
-            self.NCDlist[MaxKey].append(A)#更新已知类的检测器信息
-            self.minPts = self.beta * len(self.NCDlist[MaxKey]) # minPts越小，E as N越小
+        if Maxvalue > self.minPts :
+            self.NCDlist[MaxKey].append(A)#
+            self.minPts = self.beta * len(self.NCDlist[MaxKey]) # 
             return MaxKey
         else:
-            #若检测后核心点数量不够则认为是新类
             self.buffer.append(x)
             return -5
-    #检测出新类时更新检测器
     def updateNCD(self,coreIns):
-        #将新检测出来的类，添加到NCD中,检测出来不知道是正类还是反类，只是凝聚了？
-        #每个类都有一个
-        #NCDlist的元素不是同一个类型，前几个是list后头的是array
         i = coreIns[0][-1]
         # -------------
         # update CONFUSION_MATRIX based on the buffer
         # -------------
         for ins in coreIns:
             self.update_confusion_matrix(ins[-1], i)
-        if i in self.clusterList and i in self.NCDlist.keys():#如果该类之前已经被凝聚，则直接取代，或者添加？,之前凝聚过
-            self.NCDlist[i] = self.NCDlist[i]+coreIns#说明E被定为N，说明e太小
-            # self.NCDlist[i] = coreIns# 直接取代？ 时间未显著提高，准确率接近
+        if i in self.clusterList and i in self.NCDlist.keys():
+            self.NCDlist[i] = self.NCDlist[i]+coreIns#
+            # self.NCDlist[i] = coreIns# 
             # print("recluster")
-        #某类已经被凝聚之后又被凝聚，说明过于敏感e需要变大
             #special for IMDB to limit
             if self.alpha < 1: #normal is 1 Set is used to limit and IMDB is 0.7
                 self.alpha += self.e_step
@@ -214,30 +204,25 @@ class DyfAndNCD(SuperClassifier):
             #     self.alpha += self.e_step
             #     print("update alpha"+str(self.alpha))
             disMat = self.compute_squared_EDM(self.NCDlist[i])
-            self.epsilon = self.alpha * np.mean(disMat)#当有同样的类被凝聚出现时，说明e太小了，e需要变大，否则维持不变,扩充minPts也是必须的，需要更多的Minpts
+            self.epsilon = self.alpha * np.mean(disMat)pts
 
 
-            if len(self.NCDlist[i]) > self.window:#对核心点列表稀疏,大于buffer则稀疏
-                #距离稀疏，可能导致列表内仅剩一个或没有核心点，造成计算距离无法通过
-                #筛选距离核心点，剔除多余点
+            if len(self.NCDlist[i]) > self.window:
                 core_points_index = np.where(np.sum(np.where(disMat <= self.epsilon, 1, 0), axis=1) >= self.minPts)[0]
                 tmp = [self.NCDlist[i][j] for j in core_points_index]
                 if len(tmp) > self.window:
-                    tmp = sample(self.NCDlist[i], int(self.sparse * self.window))#直接随机筛除
+                    tmp = sample(self.NCDlist[i], int(self.sparse * self.window))
                 # if len(tmp) > int(self.minPts):
-                #     tmp = sample(self.NCDlist[i], int(self.sparse * self.minPts))#直接随机筛除
+                #     tmp = sample(self.NCDlist[i], int(self.sparse * self.minPts))
                 self.NCDlist[i] = tmp
             # print(str(i)+": the list is rebuild, epsilon growing... ")
         else:
-            self.upClass(i) #将检测到的新类返回给分类器，同时保存在检测器中(need only one to get the corresponding label )
+            self.upClass(i) 
             self.NCDlist[i] = coreIns
             print("get new class")
     #计算欧氏距离
     def compute_squared_EDM(self, X):
-        #squareform函数，输入是稀疏的就返回原本的，输入非稀疏的就返回稀疏的
-        #pdist计算各行向量之间的距离，返回值是一个长为n(n-1)/2的行向量
-        #squareform将pdist的返回值重新变成一个nxn的对称矩阵
-
+       
         X = np.array(X, dtype = np.float)
         return squareform(pdist(X,metric='euclidean'))#返回一个稀疏矩阵，存储矩阵的上三角，为各点的距离,输入值X应该为ndarray
 
@@ -249,54 +234,37 @@ class DyfAndNCD(SuperClassifier):
         print("get new class")
         print(self.clusterList , self.CLASSES)
 
-    def DBSCAN(self, data):# 这里的data是buffer，补全之后
-        # 获得距离矩阵，这里是计算各点之间的距离直接计算了各个点之间的距离
+    def DBSCAN(self, data):# 
 
         dataset = np.delete(data, -1, axis=1)
-        disMat = self.compute_squared_EDM(dataset)#这里存储的各个点之间的距离
+        disMat = self.compute_squared_EDM(dataset)#
         # if self.epsilon == 0:
-        #根据距离矩阵确定e
-        self.epsilon  =  self.alpha * np.mean(disMat)# 每次聚类都重新对self.e赋值
+        self.epsilon  =  self.alpha * np.mean(disMat)# 
         self.minPts = self.beta * np.size(disMat[0],0)  #IMDB的时Min太大
-        # 获得数据的行和列(一共有n条数据)
         n = len(data)
-        # 将矩阵的中小于eps的数赋予1，大于eps的数赋予零，然后1代表对每一行求和,然后求核心点坐标的索引
-        core_points_index = np.where(np.sum(np.where(disMat <= self.epsilon, 1, 0), axis=1) >= self.minPts)[0]#计算出邻域内点的个数
-        # 初始化类别，-1代表未分类。
-        labels = np.full((n,), -1) #构建一个数组，用-1作为填充值，预填充，-1代表未被访问，有n个实例，因此label的size是n，这里并不是真实标签，只是用来标记这些点是否被访问
-        clusterId = 0 #标记点是否被访问
+        core_points_index = np.where(np.sum(np.where(disMat <= self.epsilon, 1, 0), axis=1) >= self.minPts)[0]
+        labels = np.full((n,), -1) 
+        clusterId = 0 
         returnSeed = []
         # 遍历所有的点
         for pointId in core_points_index:
-            # 如果点未被分类，将其作为的种子点，开始寻找相应簇集
             if (labels[pointId] == -1):
                 newClass = []
-                # 首先将点pointId标记为当前类别(即标识为已操作)
-                labels[pointId] = clusterId#标记该点被访问，也可以用类标签对应
-                # 然后寻找种子点的eps邻域且没有被分类的点，将其放入种子集合
+                labels[pointId] = clusterId
                 neighbour = np.where((disMat[:, pointId] <= self.epsilon) & (labels==-1))[0]
                 seeds = neighbour.tolist()
-                # 通过种子点，开始生长，寻找密度可达的数据点，一直到种子集合为空，一个簇集寻找完毕
                 while len(seeds) > 0:
-                    # 弹出一个新种子点
                     newPoint = seeds.pop()
-                    # 将newPoint标记为当前类,因为这个种子点是当前簇所生成的点，必然属于当前类，被访问（同时也能标记类别）
                     labels[newPoint] = clusterId
-                    # 寻找newPoint种子点eps邻域（包含自己）
                     queryResults = np.where(disMat[:,newPoint] <= self.epsilon)[0]
-                    # 如果newPoint属于核心点，那么newPoint是可以扩展的，即密度是可以通过newPoint继续密度可达的
                     if len(queryResults) >= self.minPts:
-                        # 将邻域内且没有被分类的点压入种子集合
                         newClass.append(newPoint) #该点邻域内个数大于MinPts,该点属于对应新类，将该点加入newClass
                         for resultPoint in queryResults:
                             if labels[resultPoint] == -1:
                                 seeds.append(resultPoint)
-                # 簇集生长完毕(此时仍无法判断该类是否存在)
-                returnSeed.append(list(set(newClass)))#将新类的核心点列表索引存储
-                # 将簇加入类别标签,并初始化该类的分类器
-                # # 对于只有一个新类，这里可以不用，标记类别
+                returnSeed.append(list(set(newClass)))
+    
                 # self.clusterId = self.clusterId + 1
-        #NCD核心点列表添加类别的核心点(应该是实例本身，而不是索引),通过核心点索引，选出核心点本身
         for newClass in returnSeed:
             core_ins = [ins for ins in data if data.index(ins) in newClass]#这里返回的，导致没更新
             if len(core_ins) > 0:
