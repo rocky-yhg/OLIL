@@ -1,2 +1,2 @@
-# OLIL
-This is the latest implementation of online learning from incomplete data streams without labels
+# OLFL
+This is the latest implementation of online learning from fickle data streams without labels
